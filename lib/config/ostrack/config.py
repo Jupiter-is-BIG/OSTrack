@@ -135,7 +135,8 @@ def _update_config(base_cfg, exp_cfg):
                 else:
                     _update_config(base_cfg[k], v)
             else:
-                raise ValueError("{} not exist in config.py".format(k))
+                # raise ValueError("{} not exist in config.py".format(k))
+                print(f"[WARNING] '{k}' not found in config.py — skipping")
     else:
         return
 

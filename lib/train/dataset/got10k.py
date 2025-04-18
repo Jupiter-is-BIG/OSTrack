@@ -64,7 +64,7 @@ class Got10k(BaseVideoDataset):
         elif seq_ids is None:
             seq_ids = list(range(0, len(self.sequence_list)))
 
-        self.sequence_list = [self.sequence_list[i] for i in seq_ids]
+        self.sequence_list = [self.sequence_list[i] for i in seq_ids if i < len(self.sequence_list)] # TEMP CHANGE
 
         if data_fraction is not None:
             self.sequence_list = random.sample(self.sequence_list, int(len(self.sequence_list)*data_fraction))

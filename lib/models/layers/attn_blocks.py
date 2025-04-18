@@ -127,7 +127,7 @@ class CEBlock(nn.Module):
 
         self.norm3 = norm_layer(dim) # Added normalization after the GCN
 
-    def forward(self, x, global_index_template, global_index_search, ce_template_mask=None, ce_keep_rate=None):
+    def forward(self, x, global_index_template, global_index_search, mask=None, ce_template_mask=None, ce_keep_rate=None):
         B, N, C = x.shape
         x_attn, attn = self.attn(self.norm1(x), True)
         x = x + self.drop_path(x_attn)

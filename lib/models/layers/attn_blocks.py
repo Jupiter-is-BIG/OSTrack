@@ -92,6 +92,9 @@ class GCNLayer(nn.Module):
         # Support is the result of multiplying features by weights
         support = self.linear(x) # (B,N,D)
         # Output is the result of multiplying adjacency matrix by the support
+        print(f"adj_matrix shape: {adj_matrix.shape}")
+        print(f"support shape: {support.shape}")
+
         output = torch.bmm(adj_matrix, support) # (B, N, N) * (B, N, D) --> (B, N, D)
 
         return output

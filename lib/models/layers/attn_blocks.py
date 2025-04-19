@@ -92,8 +92,11 @@ class GCNLayer(nn.Module):
         # Support is the result of multiplying features by weights
         support = self.linear(x) # (B,N,D)
         # Output is the result of multiplying adjacency matrix by the support
-        print(f"adj_matrix shape: {adj_matrix.shape}")
-        print(f"support shape: {support.shape}")
+        # print(f"adj_matrix shape: {adj_matrix.shape}")
+        # print(f"support shape: {support.shape}")
+
+        # adj_matrix shape: torch.Size([32, 256, 64])
+        # support shape: torch.Size([32, 256, 768])
 
         output = torch.bmm(adj_matrix, support) # (B, N, N) * (B, N, D) --> (B, N, D)
 
@@ -151,7 +154,7 @@ class CEBlock(nn.Module):
 
             # GNN Layers
             for gnn_layer in self.gnn_layers:
-                 x_s = gnn_layer(x_s, w_zx.transpose(1,2)) # Expects input (B, N, D) and adj (B,S,T)
+                 x_s = gnn_layer(x_s, w_zx) # Expects input (B, N, D) and adj (B,S,T)
 
             x = torch.cat([x_t, x_s], dim=1)
             x = x + self.drop_path(self.norm3(x)) #Add new normalized residual connection

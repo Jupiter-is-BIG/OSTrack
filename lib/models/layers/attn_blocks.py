@@ -180,7 +180,7 @@ class CEBlock(nn.Module):
             keep_indices = torch.argsort(score_s, dim=1, descending=True)[:, :int(keep_ratio_search * score_s.shape[1])]
             removed_index_search = torch.argsort(score_s, dim=1, descending=True)[:, int(keep_ratio_search * score_s.shape[1]):]
             # update global_index_s
-            global_index_s = torch.gather(global_index_s, index=keep_indices, dim=1)
+            global_index_search = torch.gather(global_index_search, index=keep_indices, dim=1)
 
             # mask out tokens
             s_indices_keep = keep_indices + lens_t

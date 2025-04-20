@@ -144,28 +144,33 @@ class CEBlock(nn.Module):
 
         if len(self.gnn_layers) > 0:
             # Split into template and search tokens
-            x_t = x[:, :lens_t]
-            x_s = x[:, lens_t:]
+            # x_t = x[:, :lens_t]
+            # x_s = x[:, lens_t:]
+
+            attn_avg = attn.mean(dim=1)
+            adj = F.softmax(attn_avg, dim=-1)
+            adj = 0.5 * (adj + adj.transpose(1, 2))
+
 
             # Extract attention weights (Wzx) and normalize
-            w_ts = attn[:, :, :lens_t, lens_t:]  # (B, H, T, S)
-            w_ts = w_ts.sum(dim=1) / self.attn.num_heads # Average over heads. (B, T, S)
-            w_ts = F.softmax(w_ts, dim=2)
+            # w_ts = attn[:, :, :lens_t, lens_t:]  # (B, H, T, S)
+            # w_ts = w_ts.sum(dim=1) / self.attn.num_heads # Average over heads. (B, T, S)
+            # w_ts = F.softmax(w_ts, dim=2)
 
-            zeros_tt = torch.zeros(B, lens_t, lens_t, device=x.device)
-            zeros_ss = torch.zeros(B, lens_s, lens_s, device=x.device)
-            w_st = w_ts.transpose(1, 2)  # (B, N_s, N_t)
+            # zeros_tt = torch.zeros(B, lens_t, lens_t, device=x.device)
+            # zeros_ss = torch.zeros(B, lens_s, lens_s, device=x.device)
+            # w_st = w_ts.transpose(1, 2)  # (B, N_s, N_t)
 
-            top = torch.cat([zeros_tt, w_ts], dim=2)  # (B, N_t, N_t + N_s)
-            bottom = torch.cat([w_st, zeros_ss], dim=2)  # (B, N_s, N_t + N_s)
-            adj = torch.cat([top, bottom], dim=1)  # (B, N_t + N_s, N_t + N_s)
+            # top = torch.cat([zeros_tt, w_ts], dim=2)  # (B, N_t, N_t + N_s)
+            # bottom = torch.cat([w_st, zeros_ss], dim=2)  # (B, N_s, N_t + N_s)
+            # adj = torch.cat([top, bottom], dim=1)  # (B, N_t + N_s, N_t + N_s)
 
             # GNN Layers
             for gnn_layer in self.gnn_layers:
-                 x = gnn_layer(x, adj) # Expects input (B, N, D) and adj (B,S,T)
+                x = x_attn + self.drop_path(self.norm3(gnn_layer(x, adj))) # Expects input (B, N, D) and adj (B,S,T)
 
             # x = torch.cat([x_t, x_s], dim=1)
-            x = x + self.drop_path(self.norm3(x)) #Add new normalized residual connection
+            # x = self.drop_path(self.norm3(x)) #Add new normalized residual connection
 
         removed_index_search = None
         if self.keep_ratio_search < 1:

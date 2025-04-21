@@ -142,15 +142,25 @@ class CEBlock(nn.Module):
         lens_t = global_index_template.shape[1]
         lens_s = global_index_search.shape[1]
 
+        x_before_gnn = x  # Save input before GNN
+
+
         if len(self.gnn_layers) > 0:
             # Split into template and search tokens
             # x_t = x[:, :lens_t]
             # x_s = x[:, lens_t:]
 
-            attn_avg = attn.mean(dim=1)
-            adj = F.softmax(attn_avg, dim=-1)
-            adj = 0.5 * (adj + adj.transpose(1, 2))
+            # attn_avg = attn.mean(dim=1)
+            # adj = F.softmax(attn_avg, dim=-1)
+            # adj = 0.5 * (adj + adj.transpose(1, 2))
 
+            lens_t = global_index_template.shape[1]
+            lens_s = global_index_search.shape[1]
+
+            adj = torch.zeros(B, N, N, device=x.device)
+            adj[:, :lens_t, lens_t:] = 1
+            adj[:, lens_t:, :lens_t] = 1
+            adj[:, torch.arange(N), torch.arange(N)] = 1
 
             # Extract attention weights (Wzx) and normalize
             # w_ts = attn[:, :, :lens_t, lens_t:]  # (B, H, T, S)
@@ -167,10 +177,12 @@ class CEBlock(nn.Module):
 
             # GNN Layers
             for gnn_layer in self.gnn_layers:
-                x = x_attn + self.drop_path(self.norm3(gnn_layer(x, adj))) # Expects input (B, N, D) and adj (B,S,T)
+                # x = x_attn + self.drop_path(self.norm3(gnn_layer(x, adj))) # Expects input (B, N, D) and adj (B,S,T)
+                x = self.norm3(gnn_layer(x, adj))
 
             # x = torch.cat([x_t, x_s], dim=1)
             # x = self.drop_path(self.norm3(x)) #Add new normalized residual connection
+            x = x_before_gnn + self.drop_path(x)
 
         removed_index_search = None
         if self.keep_ratio_search < 1:

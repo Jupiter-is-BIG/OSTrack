@@ -182,7 +182,7 @@ class CEBlock(nn.Module):
 
             # x = torch.cat([x_t, x_s], dim=1)
             # x = self.drop_path(self.norm3(x)) #Add new normalized residual connection
-            x = x_before_gnn + self.drop_path(x)
+            x = self.drop_path(x)
 
         removed_index_search = None
         if self.keep_ratio_search < 1:

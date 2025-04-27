@@ -137,7 +137,6 @@ class CEBlock(nn.Module):
         B, N, C = x.shape
         x_attn, attn = self.attn(self.norm1(x), return_attention=True)
         x = x + self.drop_path(x_attn)
-        x = self.norm2(x)
         
         lens_t = global_index_template.shape[1]
         lens_s = global_index_search.shape[1]
@@ -158,7 +157,7 @@ class CEBlock(nn.Module):
             identity = torch.eye(N, device=x.device).unsqueeze(0).expand(B, -1, -1)
             adj = adj + identity
 
-            x_delta = x
+            x_delta = self.norm2(x)
             # GNN Layers
             for gnn_layer in self.gnn_layers:
                 # x = x_attn + self.drop_path(self.norm3(gnn_layer(x, adj))) # Expects input (B, N, D) and adj (B,S,T)
@@ -169,7 +168,7 @@ class CEBlock(nn.Module):
             x = x + self.drop_path(x_delta)
 
         x = x + self.drop_path(self.mlp(self.norm3(x)))
-        
+
         removed_index_search = None
         if self.keep_ratio_search < 1:
             score_s = torch.mean(attn[:, :, :lens_t, lens_t:], dim=[1, 2])

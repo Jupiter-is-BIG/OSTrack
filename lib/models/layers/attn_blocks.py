@@ -102,6 +102,56 @@ class GCNLayer(nn.Module):
 
         return output
 
+class GATLayer(nn.Module):
+    """
+    Implementation for single GAT layer
+    """
+    def __init__(self, in_features, out_features, num_heads=4, concat_method='concat', dropout_prob=0.5):
+        super(GATLayer, self).__init__()
+        self.num_heads = num_heads
+        self.out_features = out_features
+        self.concat_method = concat_method
+
+        self.dropout = nn.Dropout(dropout_prob)
+        self.leakyReLU = nn.LeakyReLU(0.2)
+
+        self.attn_source = nn.Parameter(torch.Tensor(1, num_heads, out_features))
+        self.attn_target = nn.Parameter(torch.Tensor(1, num_heads, out_features))
+        
+        self.W = nn.Linear(in_features, num_heads * out_features, bias=False)
+        self.output_proj = nn.Linear(num_heads * out_features, out_features)
+
+        self.init_weights()
+
+    def init_weights(self):
+        nn.init.xavier_uniform_(self.attn_source)
+        nn.init.xavier_uniform_(self.attn_target)
+        nn.init.xavier_uniform_(self.W.weight)
+        if self.concat_method == 'concat':
+            nn.init.xavier_uniform_(self.output_proj.weight)
+
+    def forward(self, x, adj_matrix):
+        B, N = x.shape[0], x.shape[1]
+        assert adj_matrix.shape == (B, N, N)
+        x = self.dropout(x)
+        h = self.dropout(self.W(x).view(B, N, self.num_heads, self.out_features))           # (B, N, H, Fo)
+        hs = torch.sum((h * self.attn_source), dim=-1, keepdim=True).transpose(1, 2)        # (B, H, N, 1)
+        ht = torch.sum((h * self.attn_target), dim=-1, keepdim=True).permute(0, 2, 3, 1)    # (B, H, 1, N)
+        alpha = self.leakyReLU(hs + ht) # (B, H, N, N)
+        alpha = alpha.masked_fill((adj_matrix == 0).unsqueeze(1), float('-inf'))
+        alpha = torch.softmax(alpha, dim=-1)                                                # (B, H, N, N)
+        output = torch.matmul(alpha, h.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)             # (B, N, H, Fo)
+
+        if self.concat_method == 'avg':
+            output = output.mean(dim=2)
+        elif self.concat_method == 'concat':
+            output = output.reshape(B, N, -1)
+            output = self.output_proj(output)
+        else:
+            raise ValueError(f"Unknown concat_method: {self.concat_method}")
+        
+        return output
+
 class CEBlock(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
@@ -127,7 +177,8 @@ class CEBlock(nn.Module):
             elif self.gnn_type == 'GAT':
                 # Placeholder for GAT layer.  Needs proper GATLayer implementation.
                 # Assumes single-head for simplicity;  adjust num_heads as needed.
-                raise NotImplementedError("GAT not yet implemented.")
+                # raise NotImplementedError("GAT not yet implemented.")
+                self.gnn_layers.append(GATLayer(dim, dim))
             else:
                 raise ValueError(f"Unknown GNN type: {gnn_type}")
 
@@ -143,19 +194,29 @@ class CEBlock(nn.Module):
 
         if len(self.gnn_layers) > 0:
             # Extract attention weights (Wzx) and normalize
-            w_ts = attn[:, :, :lens_t, lens_t:]  # (B, H, T, S)
-            w_ts = w_ts.sum(dim=1) / self.attn.num_heads # Average over heads. (B, T, S)
-            w_ts = F.softmax(w_ts, dim=2)
+            # w_ts = attn[:, :, :lens_t, lens_t:]  # (B, H, T, S)
+            # w_ts = w_ts.sum(dim=1) / self.attn.num_heads # Average over heads. (B, T, S)
+            # w_ts = F.softmax(w_ts, dim=2)
 
-            zeros_tt = torch.zeros(B, lens_t, lens_t, device=x.device)
-            zeros_ss = torch.zeros(B, lens_s, lens_s, device=x.device)
-            w_st = w_ts.transpose(1, 2)  # (B, N_s, N_t)
+            # zeros_tt = torch.zeros(B, lens_t, lens_t, device=x.device)
+            # zeros_ss = torch.zeros(B, lens_s, lens_s, device=x.device)
+            # w_st = w_ts.transpose(1, 2)  # (B, N_s, N_t)
 
-            top = torch.cat([zeros_tt, w_ts], dim=2)  # (B, N_t, N_t + N_s)
-            bottom = torch.cat([w_st, zeros_ss], dim=2)  # (B, N_s, N_t + N_s)
-            adj = torch.cat([top, bottom], dim=1)  # (B, N_t + N_s, N_t + N_s)
-            identity = torch.eye(N, device=x.device).unsqueeze(0).expand(B, -1, -1)
-            adj = adj + identity
+            # top = torch.cat([zeros_tt, w_ts], dim=2)  # (B, N_t, N_t + N_s)
+            # bottom = torch.cat([w_st, zeros_ss], dim=2)  # (B, N_s, N_t + N_s)
+            # adj = torch.cat([top, bottom], dim=1)  # (B, N_t + N_s, N_t + N_s)
+            # identity = torch.eye(N, device=x.device).unsqueeze(0).expand(B, -1, -1)
+            # adj = adj + identity
+
+            zeros_tt = torch.eye(lens_t, device=x.device).unsqueeze(0).expand(B, -1, -1)  # Self-loop for template
+            zeros_ss = torch.eye(lens_s, device=x.device).unsqueeze(0).expand(B, -1, -1)  # Self-loop for search
+
+            ones_ts = torch.ones(B, lens_t, lens_s, device=x.device)  # Full bipartite connections
+            ones_st = ones_ts.transpose(1, 2)
+
+            top = torch.cat([zeros_tt, ones_ts], dim=2)     # (B, T, T+S)
+            bottom = torch.cat([ones_st, zeros_ss], dim=2)  # (B, S, T+S)
+            adj = torch.cat([top, bottom], dim=1) 
 
             x_delta = self.norm2(x)
             # GNN Layers

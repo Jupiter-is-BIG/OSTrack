@@ -143,6 +143,7 @@ class GATLayer(nn.Module):
         output = torch.matmul(alpha, h.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)             # (B, N, H, Fo)
 
         if self.num_heads == 1:
+            output = output.reshape(B, N, -1)
             return output
 
         if self.concat_method == 'avg':

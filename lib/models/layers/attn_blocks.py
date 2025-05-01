@@ -106,7 +106,7 @@ class GATLayer(nn.Module):
     """
     Implementation for single GAT layer
     """
-    def __init__(self, in_features, out_features, num_heads=4, concat_method='concat', dropout_prob=0.5):
+    def __init__(self, in_features, out_features, num_heads=1, concat_method='concat', dropout_prob=0.5):
         super(GATLayer, self).__init__()
         self.num_heads = num_heads
         self.out_features = out_features
@@ -141,6 +141,9 @@ class GATLayer(nn.Module):
         alpha = alpha.masked_fill((adj_matrix == 0).unsqueeze(1), float('-inf'))
         alpha = torch.softmax(alpha, dim=-1)                                                # (B, H, N, N)
         output = torch.matmul(alpha, h.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)             # (B, N, H, Fo)
+
+        if self.num_heads == 1:
+            return output
 
         if self.concat_method == 'avg':
             output = output.mean(dim=2)
